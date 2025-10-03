@@ -567,9 +567,9 @@ const QuizScreen = ({ navigation, route }) => {
             return (
               <>
                 {/* Laser beam line */}
-                <Animated.View 
-                  style={[
-                    styles.connectionLine,
+          <Animated.View 
+            style={[
+              styles.connectionLine,
                     { 
                       opacity: 1,
                       height: laserData.length,
@@ -623,26 +623,32 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   feedbackBanner: {
+    position: 'absolute',
+    top: 100,
+    left: 20,
+    right: 20,
     backgroundColor: colors.green,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
     paddingHorizontal: 20,
-    marginHorizontal: 20,
-    marginTop: 10,
     borderRadius: 8,
+    zIndex: 1000,
   },
   feedbackBannerError: {
+    position: 'absolute',
+    top: 100,
+    left: 20,
+    right: 20,
     backgroundColor: colors.red,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
     paddingHorizontal: 20,
-    marginHorizontal: 20,
-    marginTop: 10,
     borderRadius: 8,
+    zIndex: 1000,
   },
   feedbackIcon: {
     fontSize: 20,
@@ -658,9 +664,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 10,
-    paddingTop: Platform.OS === 'ios' ? 50 : 40,
+    paddingTop: Platform.OS === 'ios' ? 70 : 60,
     paddingBottom: 15,
-    minHeight: 80,
+    minHeight: 100,
   },
   progressDots: {
     flexDirection: 'row',
@@ -676,7 +682,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flexWrap: 'nowrap',
+    flexWrap: 'wrap',
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 5,
@@ -711,19 +717,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     padding: 20,
+    paddingTop: 40,
     paddingBottom: 10,
     gap: 16,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   answerCard: {
     width: '45%',
     backgroundColor: colors.card,
     borderRadius: 12,
     padding: 16,
-    minHeight: 120,
+    minHeight: 160, // Flexible height with minimum
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    marginBottom: 20,
+    height:'30%',
   },
   correctAnswer: {
     backgroundColor: colors.blue,
@@ -737,12 +747,13 @@ const styles = StyleSheet.create({
   answerText: {
     ...typography.bodySmall,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 26,
+    fontSize: 16,
   },
   checkmark: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 12,
+    right: 12,
     backgroundColor: colors.green,
     borderRadius: 12,
     width: 24,
@@ -752,8 +763,8 @@ const styles = StyleSheet.create({
   },
   crossmark: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 12,
+    right: 12,
     backgroundColor: colors.red,
     borderRadius: 12,
     width: 24,
@@ -769,28 +780,28 @@ const styles = StyleSheet.create({
   bearContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 10,
-    paddingTop: 0,
-    marginTop: 10,
+    paddingBottom: 20,
+    paddingTop: 10,
+    marginTop: 20,
     position: 'relative',
     width: '100%',
   },
   bearIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
   },
   bearText: {
-    fontSize: 24,
+    fontSize: 32,
   },
   connectionLine: {
     position: 'absolute',
     width: 4, // Thinner line
     height: 100, // Will be overridden dynamically
-    bottom: 20, // Start from center of bear (bear icon is 40px, center at 20px)
+    bottom: 30, // Start from center of bear (bear icon is 60px, center at 30px)
     left: '50%',
     marginLeft: -2, // Center the line (half of width 4)
     transformOrigin: 'bottom center', // Rotate from the bear position
@@ -804,7 +815,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 40, // Larger for impact graphic
     height: 40,
-    bottom: 20, // Start from center of bear
+    bottom: 30, // Start from center of bear
     left: '50%',
     marginLeft: -20, // Center the point (half of width 40)
     justifyContent: 'center',
