@@ -15,6 +15,7 @@ import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { mockData } from '../data/mockData';
 import LeaderboardModal from '../components/LeaderboardModal';
+import GameHeader from '../components/GameHeader';
 import { fetchQuizData, testAPI } from '../services/api';
 
 // Local fallback data function
@@ -210,31 +211,15 @@ const MissionBriefingScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       
-      {/* Top Section */}
-      <View style={styles.topSection}>
-        {/* Progress Dots */}
-        <View style={styles.progressDots}>
-          <View style={styles.dot} />
-          <View style={styles.dot} />
-          <View style={styles.dot} />
-        </View>
-        
-        {/* Game Stats */}
-        <View style={styles.gameStats}>
-          <Text style={styles.gameStatText}>Round {mockData.gameStats.round}/{mockData.gameStats.totalRounds}</Text>
-          <Text style={styles.gameStatText}>Best RT — ms</Text>
-          <Text style={styles.gameStatText}>Streak {mockData.gameStats.streak}</Text>
-          <Text style={styles.gameStatText}>Score {mockData.gameStats.score}</Text>
-          <View style={styles.scoreIcon}>
-            <Text style={styles.scoreIconText}>⚡</Text>
-          </View>
-        </View>
-        
-        {/* Leaderboard Button */}
-        <TouchableOpacity style={styles.leaderboardButton} onPress={handleLeaderboard}>
-          <Text style={styles.leaderboardButtonText}>Leaderboard</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Game Header */}
+      <GameHeader 
+        currentRound={mockData.gameStats.round}
+        totalRounds={mockData.gameStats.totalRounds}
+        bestRT={0}
+        currentStreak={mockData.gameStats.streak}
+        currentScore={mockData.gameStats.score}
+        onLeaderboardPress={handleLeaderboard}
+      />
 
       {/* Loading Screen */}
       {loading && (
@@ -287,59 +272,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.primary,
-  },
-  topSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingTop: Platform.OS === 'ios' ? 50 : 40,
-    paddingBottom: 15,
-    minHeight: 80,
-  },
-  progressDots: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.yellow,
-  },
-  gameStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'nowrap',
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 5,
-  },
-  gameStatText: {
-    ...typography.gameStat,
-    fontSize: 11,
-    whiteSpace: 'nowrap',
-    flexShrink: 0,
-  },
-  scoreIcon: {
-    marginLeft: 4,
-  },
-  scoreIconText: {
-    fontSize: 16,
-    color: colors.lightBlue,
-  },
-  leaderboardButton: {
-    backgroundColor: colors.blue,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 6,
-    flexShrink: 0,
-  },
-  leaderboardButtonText: {
-    ...typography.buttonSmall,
-    color: colors.white,
-    fontSize: 11,
   },
   loadingScreen: {
     position: 'absolute',

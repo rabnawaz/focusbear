@@ -14,12 +14,16 @@ import {
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { mockData } from '../data/mockData';
+import GameHeader from '../components/GameHeader';
+import LeaderboardModal from '../components/LeaderboardModal';
+import { saveQuizResult } from '../services/sessionStorage';
 
 const ResultsScreen = ({ navigation, route }) => {
   const { mission, topic, accuracy, fastestRT, score, totalRounds, completedRounds } = route.params || mockData.results;
   const [scoreName, setScoreName] = useState(`${topic} quiz`);
   const [confettiAnim] = useState(new Animated.Value(0));
   const [progressAnim] = useState(new Animated.Value(0));
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
 
   // Calculate progress based on success rate (accuracy + score performance)
   const calculateProgressPercentage = () => {
@@ -64,40 +68,46 @@ const ResultsScreen = ({ navigation, route }) => {
     }).start();
   }, []);
 
-  const handleSaveScore = () => {
-    console.log('Save score:', scoreName);
-    navigation.navigate('MissionBriefing');
+  const handleSaveScore = async () => {
+    try {
+      const quizData = {
+        scoreName: scoreName,
+        score: score,
+        bestRT: fastestRT,
+        accuracy: accuracy,
+        topic: topic,
+        completedRounds: completedRounds,
+        totalRounds: totalRounds,
+        mission: mission,
+      };
+      
+      await saveQuizResult(quizData);
+      console.log('Score saved successfully:', scoreName);
+      navigation.navigate('MissionBriefing');
+    } catch (error) {
+      console.error('Error saving score:', error);
+      // Still navigate even if save fails
+      navigation.navigate('MissionBriefing');
+    }
   };
 
   const handleLeaderboard = () => {
-    console.log('Open leaderboard');
+    setShowLeaderboard(true);
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       
-      {/* Top Section */}
-      <View style={styles.topSection}>
-        {/* Progress Dots */}
-        <View style={styles.progressDots}>
-          <View style={styles.dot} />
-          <View style={styles.dot} />
-        </View>
-        
-        {/* Game Stats */}
-        <View style={styles.gameStats}>
-          <Text style={styles.gameStatText}>Round {completedRounds}/{totalRounds}</Text>
-          <Text style={styles.gameStatText}>Best RT {fastestRT} ms</Text>
-          <Text style={styles.gameStatText}>Streak {completedRounds === totalRounds ? completedRounds : 0}</Text>
-          <Text style={styles.gameStatText}>Score {score}</Text>
-        </View>
-        
-        {/* Sound Button */}
-        <TouchableOpacity style={styles.soundButton} onPress={() => console.log('Toggle sound')}>
-          <Text style={styles.soundIcon}>🔊</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Game Header */}
+      <GameHeader 
+        currentRound={completedRounds}
+        totalRounds={totalRounds}
+        bestRT={fastestRT}
+        currentStreak={completedRounds === totalRounds ? completedRounds : 0}
+        currentScore={score}
+        onLeaderboardPress={handleLeaderboard}
+      />
 
       {/* Results Card */}
       <View style={styles.resultsCard}>
@@ -179,6 +189,12 @@ const ResultsScreen = ({ navigation, route }) => {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Leaderboard Modal */}
+      <LeaderboardModal 
+        visible={showLeaderboard} 
+        onClose={() => setShowLeaderboard(false)} 
+      />
     </SafeAreaView>
   );
 };
@@ -187,49 +203,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.primary,
-  },
-  topSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 40,
-    paddingBottom: 15,
-    minHeight: 80,
-  },
-  progressDots: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.yellow,
-  },
-  gameStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flexWrap: 'wrap',
-    flex: 1,
-    justifyContent: 'center',
-  },
-  gameStatText: {
-    ...typography.gameStat,
-    fontSize: 11,
-    whiteSpace: 'nowrap',
-  },
-  soundButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: colors.blue,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  soundIcon: {
-    fontSize: 16,
   },
   resultsCard: {
     backgroundColor: colors.card,

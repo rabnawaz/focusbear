@@ -7,169 +7,17 @@ import {
   SafeAreaView,
   StatusBar,
   Animated,
-  Platform,
-  Dimensions,
   Vibration,
 } from 'react-native';
-import { Audio } from 'expo-av';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { mockData } from '../data/mockData';
 import LeaderboardModal from '../components/LeaderboardModal';
+import GameHeader from '../components/GameHeader';
+import { initializeSounds } from '../services/soundService';
+import { getLaserData, updateGameStats } from '../utils/gameUtils';
+import { QUIZ_CONSTANTS, TEXT_CONTENT, LOG_MESSAGES, NAVIGATION_ROUTES } from '../constants/quizConstants';
 
-// Create laser hit sound using expo-av
-const createLaserHitSound = async (isCorrect) => {
-  console.log(`Creating ${isCorrect ? 'correct' : 'incorrect'} laser sound`);
-  
-  try {
-    const sound = new Audio.Sound();
-    
-    // Create different sound characteristics
-    // For correct: higher pitch, shorter duration (laser hit)
-    // For incorrect: thunderous gunshot with multiple frequencies
-    const frequency = isCorrect ? 1200 : 200; // Much lower for gunshot
-    const duration = isCorrect ? 0.2 : 0.8; // Longer for thunderous effect
-    
-    // Create a simple tone using Web Audio API approach
-    const createTone = () => {
-      const sampleRate = 44100;
-      const samples = Math.floor(sampleRate * duration);
-      const buffer = new ArrayBuffer(44 + samples * 2);
-      const view = new DataView(buffer);
-      
-      // WAV header
-      const writeString = (offset, string) => {
-        for (let i = 0; i < string.length; i++) {
-          view.setUint8(offset + i, string.charCodeAt(i));
-        }
-      };
-      
-      writeString(0, 'RIFF');
-      view.setUint32(4, 36 + samples * 2, true);
-      writeString(8, 'WAVE');
-      writeString(12, 'fmt ');
-      view.setUint32(16, 16, true);
-      view.setUint16(20, 1, true);
-      view.setUint16(22, 1, true);
-      view.setUint32(24, sampleRate, true);
-      view.setUint32(28, sampleRate * 2, true);
-      view.setUint16(32, 2, true);
-      view.setUint16(34, 16, true);
-      writeString(36, 'data');
-      view.setUint32(40, samples * 2, true);
-      
-      // Generate sound wave
-      for (let i = 0; i < samples; i++) {
-        const t = i / sampleRate;
-        let sample = 0;
-        
-        if (isCorrect) {
-          // Simple high-pitched laser hit
-          const envelope = Math.exp(-t * 6);
-          sample = Math.sin(2 * Math.PI * frequency * t) * envelope * 0.3;
-        } else {
-          // Thunderous gunshot with multiple frequencies and noise
-          const envelope = Math.exp(-t * 2); // Slower decay for thunder
-          
-          // Base frequency (low rumble)
-          sample += Math.sin(2 * Math.PI * frequency * t) * envelope * 0.4;
-          
-          // Add harmonics for more complex sound
-          sample += Math.sin(2 * Math.PI * frequency * 2 * t) * envelope * 0.2;
-          sample += Math.sin(2 * Math.PI * frequency * 3 * t) * envelope * 0.1;
-          
-          // Add some noise for gunshot crack
-          const noise = (Math.random() - 0.5) * 0.3;
-          sample += noise * envelope;
-          
-          // Add a sharp crack at the beginning
-          if (t < 0.1) {
-            const crackEnvelope = Math.exp(-t * 50);
-            sample += Math.sin(2 * Math.PI * 800 * t) * crackEnvelope * 0.5;
-          }
-        }
-        
-        // Clamp the sample to prevent distortion
-        sample = Math.max(-1, Math.min(1, sample));
-        view.setInt16(44 + i * 2, sample * 32767, true);
-      }
-      
-      return buffer;
-    };
-    
-    const audioBuffer = createTone();
-    const bytes = new Uint8Array(audioBuffer);
-    
-    // Convert to base64 manually
-    let base64 = '';
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-    for (let i = 0; i < bytes.length; i += 3) {
-      const a = bytes[i];
-      const b = bytes[i + 1] || 0;
-      const c = bytes[i + 2] || 0;
-      const bitmap = (a << 16) | (b << 8) | c;
-      base64 += chars.charAt((bitmap >> 18) & 63);
-      base64 += chars.charAt((bitmap >> 12) & 63);
-      base64 += chars.charAt((bitmap >> 6) & 63);
-      base64 += chars.charAt(bitmap & 63);
-    }
-    
-    const dataUri = `data:audio/wav;base64,${base64}`;
-    console.log(`Loading ${isCorrect ? 'correct' : 'incorrect'} sound with data URI length:`, dataUri.length);
-    await sound.loadAsync({ uri: dataUri });
-    console.log(`Successfully loaded ${isCorrect ? 'correct' : 'incorrect'} sound`);
-    
-    return {
-      play: async () => {
-        try {
-          console.log(`Playing ${isCorrect ? 'correct' : 'incorrect'} laser sound`);
-          
-          // Play the audio
-          await sound.replayAsync();
-          
-          // Add vibration feedback
-          if (isCorrect) {
-            Vibration.vibrate([0, 30, 15, 30, 15, 60]);
-          } else {
-            // Thunderous gunshot vibration pattern
-            Vibration.vibrate([0, 100, 50, 150, 75, 200, 100, 100]);
-          }
-        } catch (error) {
-          console.log('Sound playback error:', error);
-          // Fallback to vibration only
-          if (isCorrect) {
-            Vibration.vibrate([0, 30, 15, 30, 15, 60]);
-          } else {
-            // Thunderous gunshot fallback vibration
-            Vibration.vibrate([0, 100, 50, 150, 75, 200, 100, 100]);
-          }
-        }
-      },
-      unload: async () => {
-        try {
-          await sound.unloadAsync();
-        } catch (error) {
-          console.log('Error unloading sound:', error);
-        }
-      }
-    };
-  } catch (error) {
-    console.log('Error creating sound:', error);
-    // Fallback to vibration only
-    return {
-      play: async () => {
-        console.log(`Playing fallback ${isCorrect ? 'correct' : 'incorrect'} vibration`);
-        if (isCorrect) {
-          Vibration.vibrate([0, 30, 15, 30, 15, 60]);
-        } else {
-          // Thunderous gunshot fallback vibration
-          Vibration.vibrate([0, 100, 50, 150, 75, 200, 100, 100]);
-        }
-      },
-      unload: async () => {}
-    };
-  }
-};
 
 const QuizScreen = ({ navigation, route }) => {
   const { quizData, mission, topic, currentRound, totalRounds, wrongAttempts, gameStats } = route.params || {};
@@ -201,25 +49,25 @@ const QuizScreen = ({ navigation, route }) => {
   const currentRoundState = currentRound || 1;
   const currentQuestion = quizData?.[currentRoundState - 1] || mockData.quizQuestions[0];
 
-  console.log(`Quiz Screen - Round: ${currentRoundState}/${totalRounds}, Wrong Attempts: ${currentWrongAttempts}, Question:`, currentQuestion);
+  console.log(`${LOG_MESSAGES.QUIZ_SCREEN} ${currentRoundState}/${totalRounds}, Wrong Attempts: ${currentWrongAttempts}, Question:`, currentQuestion);
 
   useEffect(() => {
     if (showFeedback) {
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 300,
+          duration: QUIZ_CONSTANTS.ANIMATION_DURATION.FEEDBACK_FADE,
           useNativeDriver: true,
         }),
         Animated.sequence([
           Animated.timing(scaleAnim, {
             toValue: 1.1,
-            duration: 150,
+            duration: QUIZ_CONSTANTS.ANIMATION_DURATION.SCALE_UP,
             useNativeDriver: true,
           }),
           Animated.timing(scaleAnim, {
             toValue: 1,
-            duration: 150,
+            duration: QUIZ_CONSTANTS.ANIMATION_DURATION.SCALE_DOWN,
             useNativeDriver: true,
           }),
         ]),
@@ -239,28 +87,9 @@ const QuizScreen = ({ navigation, route }) => {
   // Initialize sound effects
   useEffect(() => {
     const loadSounds = async () => {
-      try {
-        console.log('Initializing laser hit sounds...');
-        
-        // Configure audio mode for Android
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          staysActiveInBackground: false,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: false, // Don't duck other audio
-          playThroughEarpieceAndroid: false,
-        });
-        
-        // Create simple laser hit sounds
-        const correctSoundData = await createLaserHitSound(true);
-        const incorrectSoundData = await createLaserHitSound(false);
-        
-        setCorrectSound(correctSoundData);
-        setIncorrectSound(incorrectSoundData);
-        console.log('Laser hit sounds initialized successfully');
-      } catch (error) {
-        console.log('Error loading sounds:', error);
-      }
+      const sounds = await initializeSounds();
+      setCorrectSound(sounds.correctSound);
+      setIncorrectSound(sounds.incorrectSound);
     };
 
     loadSounds();
@@ -278,7 +107,7 @@ const QuizScreen = ({ navigation, route }) => {
     const isCorrect = index === currentQuestion.correctAnswer;
     const soundToPlay = isCorrect ? correctSound : incorrectSound;
     
-    console.log('Answer selected:', index, 'isCorrect:', isCorrect);
+    console.log(`${LOG_MESSAGES.ANSWER_SELECTED} ${index} isCorrect: ${isCorrect}`);
     console.log('correctSound available:', !!correctSound);
     console.log('incorrectSound available:', !!incorrectSound);
     console.log('soundToPlay available:', !!soundToPlay);
@@ -287,12 +116,12 @@ const QuizScreen = ({ navigation, route }) => {
       console.log('Playing sound...');
       soundToPlay.play();
     } else {
-      console.log('No sound available, using fallback vibration');
+      console.log(LOG_MESSAGES.NO_SOUND_AVAILABLE);
       // Fallback vibration
       if (isCorrect) {
-        Vibration.vibrate([0, 30, 15, 30, 15, 60]);
+        Vibration.vibrate(QUIZ_CONSTANTS.VIBRATION.FALLBACK_CORRECT);
       } else {
-        Vibration.vibrate([0, 80, 40, 80, 40, 120]);
+        Vibration.vibrate(QUIZ_CONSTANTS.VIBRATION.FALLBACK_INCORRECT);
       }
     }
     
@@ -303,12 +132,12 @@ const QuizScreen = ({ navigation, route }) => {
       Animated.sequence([
         Animated.timing(laserPulseAnim, {
           toValue: 1.2,
-          duration: 200,
+          duration: QUIZ_CONSTANTS.ANIMATION_DURATION.LASER_PULSE,
           useNativeDriver: true,
         }),
         Animated.timing(laserPulseAnim, {
           toValue: 1,
-          duration: 200,
+          duration: QUIZ_CONSTANTS.ANIMATION_DURATION.LASER_PULSE,
           useNativeDriver: true,
         }),
       ])
@@ -318,7 +147,21 @@ const QuizScreen = ({ navigation, route }) => {
     const reactionTime = Math.floor(Math.random() * 5000) + 1000; // 1-6 seconds
     
     // Update game stats
-    const updatedStats = updateGameStats(isCorrect, reactionTime);
+    const currentStats = {
+      currentScore,
+      currentStreak,
+      correctAnswers,
+      totalAnswered,
+      bestRT
+    };
+    const updatedStats = updateGameStats(isCorrect, reactionTime, currentStats);
+    
+    // Update local state immediately to show updated values in the header
+    setCurrentScore(updatedStats.score);
+    setCurrentStreak(updatedStats.streak);
+    setCorrectAnswers(updatedStats.correctAnswers);
+    setTotalAnswered(updatedStats.totalAnswered);
+    setBestRT(updatedStats.bestRT);
     
     console.log(`Answer selected: ${index}, Correct: ${isCorrect}, Score: ${updatedStats.score}, Streak: ${updatedStats.streak}`);
     
@@ -328,7 +171,7 @@ const QuizScreen = ({ navigation, route }) => {
       
       if (nextRound > totalRounds) {
         // All rounds completed - go to results
-        navigation.navigate('Results', {
+        navigation.navigate(NAVIGATION_ROUTES.RESULTS, {
           mission,
           topic,
           accuracy: updatedStats.accuracy,
@@ -339,7 +182,7 @@ const QuizScreen = ({ navigation, route }) => {
         });
       } else {
         // Move to next round with updated stats
-        navigation.navigate('Quiz', {
+        navigation.navigate(NAVIGATION_ROUTES.QUIZ, {
           quizData,
           mission,
           topic,
@@ -349,7 +192,7 @@ const QuizScreen = ({ navigation, route }) => {
           gameStats: updatedStats
         });
       }
-    }, 1500); // Reduced timeout for faster flow
+    }, QUIZ_CONSTANTS.ANIMATION_DURATION.NAVIGATION_DELAY);
   };
 
 
@@ -357,99 +200,13 @@ const QuizScreen = ({ navigation, route }) => {
     return currentScore;
   };
 
-  const calculateAccuracy = () => {
-    if (totalAnswered === 0) return 0;
-    return Math.round((correctAnswers / totalAnswered) * 100);
-  };
-
-  const updateGameStats = (isCorrect, reactionTime) => {
-    const newTotalAnswered = totalAnswered + 1;
-    const newCorrectAnswers = isCorrect ? correctAnswers + 1 : correctAnswers;
-    const newStreak = isCorrect ? currentStreak + 1 : 0;
-    
-    // Calculate score based on correct answers and streak
-    let scoreIncrease = 0;
-    if (isCorrect) {
-      scoreIncrease = 10 + (newStreak * 2); // Base 10 points + 2 bonus per streak
-    } else {
-      scoreIncrease = -5; // Penalty for wrong answers
-    }
-    
-    const newScore = Math.max(0, currentScore + scoreIncrease); // Don't go below 0
-    
-    // Update best reaction time
-    const newBestRT = bestRT === 0 ? reactionTime : Math.min(bestRT, reactionTime);
-    
-    setCurrentScore(newScore);
-    setCurrentStreak(newStreak);
-    setCorrectAnswers(newCorrectAnswers);
-    setTotalAnswered(newTotalAnswered);
-    setBestRT(newBestRT);
-    
-    return {
-      score: newScore,
-      streak: newStreak,
-      correctAnswers: newCorrectAnswers,
-      totalAnswered: newTotalAnswered,
-      bestRT: newBestRT,
-      accuracy: Math.round((newCorrectAnswers / newTotalAnswered) * 100)
-    };
-  };
-
   const handleLeaderboard = () => {
     setShowLeaderboard(true);
   };
 
   // Calculate laser position and angle based on actual measured layouts
-  const getLaserData = (answerIndex) => {
-    // Return null if layouts aren't measured yet
-    if (!bearLayout || !cardLayouts[answerIndex]) {
-      return null;
-    }
-    
-    const card = cardLayouts[answerIndex];
-    const bear = bearLayout;
-    
-    // Since onLayout gives relative positions within parent (answerGrid),
-    // we can calculate the offset from bear to card center
-    // Bear is below all cards in the same container
-    
-    // Calculate center of card relative to answerGrid
-    const cardCenterX = card.x + card.width / 2;
-    const cardCenterY = card.y + card.height / 2;
-    
-    // Calculate center of bear relative to answerGrid  
-    const bearCenterX = bear.x + bear.width / 2;
-    const bearCenterY = bear.y + bear.height / 2;
-    
-    // Calculate vector from bear center to card center
-    const deltaX = cardCenterX - bearCenterX;
-    const deltaY = cardCenterY - bearCenterY;
-    
-    // Calculate angle: atan2(x, -y) because y-axis is inverted in screen coordinates
-    // and we want 0° to point up
-    const angleRad = Math.atan2(deltaX, -deltaY);
-    const angleDeg = angleRad * (180 / Math.PI);
-    
-    // Calculate distance
-    const length = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-    
-    console.log(`Laser for card ${answerIndex}:`, {
-      card: { x: card.x.toFixed(1), y: card.y.toFixed(1), w: card.width.toFixed(1), h: card.height.toFixed(1) },
-      bear: { x: bear.x.toFixed(1), y: bear.y.toFixed(1), w: bear.width.toFixed(1), h: bear.height.toFixed(1) },
-      cardCenter: { x: cardCenterX.toFixed(1), y: cardCenterY.toFixed(1) },
-      bearCenter: { x: bearCenterX.toFixed(1), y: bearCenterY.toFixed(1) },
-      delta: { x: deltaX.toFixed(1), y: deltaY.toFixed(1) },
-      angle: angleDeg.toFixed(1) + '°',
-      length: length.toFixed(1) + 'px'
-    });
-    
-    return {
-      angle: `${angleDeg}deg`,
-      length: length,
-      endX: deltaX,
-      endY: deltaY
-    };
+  const getLaserDataForAnswer = (answerIndex) => {
+    return getLaserData(answerIndex, bearLayout, cardLayouts);
   };
 
   const renderAnswerOption = (option, index) => {
@@ -499,6 +256,16 @@ const QuizScreen = ({ navigation, route }) => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       
+      {/* Game Header */}
+      <GameHeader 
+        currentRound={currentRoundState}
+        totalRounds={totalRounds}
+        bestRT={bestRT}
+        currentStreak={currentStreak}
+        currentScore={calculateScore()}
+        onLeaderboardPress={handleLeaderboard}
+      />
+
       {/* Feedback Banner */}
       {showFeedback && (
         <Animated.View 
@@ -511,36 +278,10 @@ const QuizScreen = ({ navigation, route }) => {
             {selectedAnswer === currentQuestion.correctAnswer ? '✓' : '✗'}
           </Text>
           <Text style={styles.feedbackText}>
-            {selectedAnswer === currentQuestion.correctAnswer ? 'Nailed it!' : 'Not quite!'}
+            {selectedAnswer === currentQuestion.correctAnswer ? TEXT_CONTENT.CORRECT_TEXT : TEXT_CONTENT.INCORRECT_TEXT}
           </Text>
         </Animated.View>
       )}
-
-      {/* Top Section */}
-      <View style={styles.topSection}>
-        {/* Progress Dots */}
-        <View style={styles.progressDots}>
-          <View style={styles.dot} />
-          <View style={styles.dot} />
-          <View style={styles.dot} />
-        </View>
-        
-        {/* Game Stats */}
-        <View style={styles.gameStats}>
-          <Text style={styles.gameStatText}>Round {currentRoundState}/{totalRounds}</Text>
-          <Text style={styles.gameStatText}>Best RT {bestRT > 0 ? `${bestRT}ms` : '— ms'}</Text>
-          <Text style={styles.gameStatText}>Streak {currentStreak}</Text>
-          <Text style={styles.gameStatText}>Score {calculateScore()}</Text>
-          <View style={styles.scoreIcon}>
-            <Text style={styles.scoreIconText}>⚡</Text>
-          </View>
-        </View>
-        
-        {/* Leaderboard Button */}
-        <TouchableOpacity style={styles.leaderboardButton} onPress={handleLeaderboard}>
-          <Text style={styles.leaderboardButtonText}>Leaderboard</Text>
-        </TouchableOpacity>
-      </View>
 
       {/* Answer Grid */}
       <View style={styles.answerGrid}>
@@ -558,7 +299,7 @@ const QuizScreen = ({ navigation, route }) => {
             <Text style={styles.bearText}>🐻</Text>
           </View>
           {selectedAnswer !== null && (() => {
-            const laserData = getLaserData(selectedAnswer);
+            const laserData = getLaserDataForAnswer(selectedAnswer);
             if (!laserData) return null;
             
             const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
@@ -567,9 +308,9 @@ const QuizScreen = ({ navigation, route }) => {
             return (
               <>
                 {/* Laser beam line */}
-          <Animated.View 
-            style={[
-              styles.connectionLine,
+                <Animated.View 
+                  style={[
+                    styles.connectionLine,
                     { 
                       opacity: 1,
                       height: laserData.length,
@@ -622,36 +363,47 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.primary,
   },
+  answerGrid: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: QUIZ_CONSTANTS.SPACING.ANSWER_GRID_PADDING,
+    paddingTop: QUIZ_CONSTANTS.SPACING.ANSWER_GRID_PADDING_TOP,
+    paddingBottom: 10,
+    gap: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   feedbackBanner: {
     position: 'absolute',
-    top: 100,
-    left: 20,
-    right: 20,
+    top: QUIZ_CONSTANTS.SPACING.TOP_SECTION_MIN_HEIGHT,
+    left: QUIZ_CONSTANTS.SPACING.FEEDBACK_BANNER_HORIZONTAL,
+    right: QUIZ_CONSTANTS.SPACING.FEEDBACK_BANNER_HORIZONTAL,
     backgroundColor: colors.green,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    zIndex: 1000,
+    paddingVertical: QUIZ_CONSTANTS.SPACING.FEEDBACK_BANNER_PADDING_VERTICAL,
+    paddingHorizontal: QUIZ_CONSTANTS.SPACING.FEEDBACK_BANNER_PADDING_HORIZONTAL,
+    borderRadius: QUIZ_CONSTANTS.SPACING.FEEDBACK_BANNER_RADIUS,
+    zIndex: QUIZ_CONSTANTS.Z_INDEX.FEEDBACK_BANNER,
   },
   feedbackBannerError: {
     position: 'absolute',
-    top: 100,
-    left: 20,
-    right: 20,
+    top: QUIZ_CONSTANTS.SPACING.TOP_SECTION_MIN_HEIGHT,
+    left: QUIZ_CONSTANTS.SPACING.FEEDBACK_BANNER_HORIZONTAL,
+    right: QUIZ_CONSTANTS.SPACING.FEEDBACK_BANNER_HORIZONTAL,
     backgroundColor: colors.red,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    zIndex: 1000,
+    paddingVertical: QUIZ_CONSTANTS.SPACING.FEEDBACK_BANNER_PADDING_VERTICAL,
+    paddingHorizontal: QUIZ_CONSTANTS.SPACING.FEEDBACK_BANNER_PADDING_HORIZONTAL,
+    borderRadius: QUIZ_CONSTANTS.SPACING.FEEDBACK_BANNER_RADIUS,
+    zIndex: QUIZ_CONSTANTS.Z_INDEX.FEEDBACK_BANNER,
   },
   feedbackIcon: {
-    fontSize: 20,
+    fontSize: QUIZ_CONSTANTS.DIMENSIONS.FEEDBACK_ICON_SIZE,
     color: colors.white,
     marginRight: 8,
   },
@@ -659,81 +411,17 @@ const styles = StyleSheet.create({
     ...typography.button,
     color: colors.white,
   },
-  topSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingTop: Platform.OS === 'ios' ? 70 : 60,
-    paddingBottom: 15,
-    minHeight: 100,
-  },
-  progressDots: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.yellow,
-  },
-  gameStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 5,
-  },
-  gameStatText: {
-    ...typography.gameStat,
-    fontSize: 9,
-    whiteSpace: 'nowrap',
-    flexShrink: 0,
-  },
-  scoreIcon: {
-    marginLeft: 4,
-  },
-  scoreIconText: {
-    fontSize: 16,
-    color: colors.lightBlue,
-  },
-  leaderboardButton: {
-    backgroundColor: colors.blue,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 6,
-    flexShrink: 0,
-  },
-  leaderboardButtonText: {
-    ...typography.buttonSmall,
-    color: colors.white,
-    fontSize: 9,
-  },
-  answerGrid: {
-    flex: 1,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 20,
-    paddingTop: 40,
-    paddingBottom: 10,
-    gap: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   answerCard: {
-    width: '45%',
+    width: QUIZ_CONSTANTS.DIMENSIONS.ANSWER_CARD_WIDTH,
     backgroundColor: colors.card,
     borderRadius: 12,
-    padding: 16,
-    minHeight: 160, // Flexible height with minimum
+    padding: QUIZ_CONSTANTS.SPACING.ANSWER_CARD_PADDING,
+    minHeight: QUIZ_CONSTANTS.DIMENSIONS.ANSWER_CARD_MIN_HEIGHT,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
-    marginBottom: 20,
-    height:'30%',
+    marginBottom: QUIZ_CONSTANTS.SPACING.ANSWER_CARD_MARGIN_BOTTOM,
+    height: '35%',
   },
   correctAnswer: {
     backgroundColor: colors.blue,
@@ -747,17 +435,17 @@ const styles = StyleSheet.create({
   answerText: {
     ...typography.bodySmall,
     textAlign: 'center',
-    lineHeight: 26,
-    fontSize: 16,
+    lineHeight: QUIZ_CONSTANTS.TEXT_SIZES.ANSWER_TEXT_LINE_HEIGHT,
+    fontSize: QUIZ_CONSTANTS.TEXT_SIZES.ANSWER_TEXT,
   },
   checkmark: {
     position: 'absolute',
     top: 12,
     right: 12,
     backgroundColor: colors.green,
-    borderRadius: 12,
-    width: 24,
-    height: 24,
+    borderRadius: QUIZ_CONSTANTS.DIMENSIONS.CHECKMARK_RADIUS,
+    width: QUIZ_CONSTANTS.DIMENSIONS.CHECKMARK_SIZE,
+    height: QUIZ_CONSTANTS.DIMENSIONS.CHECKMARK_SIZE,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -766,40 +454,40 @@ const styles = StyleSheet.create({
     top: 12,
     right: 12,
     backgroundColor: colors.red,
-    borderRadius: 12,
-    width: 24,
-    height: 24,
+    borderRadius: QUIZ_CONSTANTS.DIMENSIONS.CHECKMARK_RADIUS,
+    width: QUIZ_CONSTANTS.DIMENSIONS.CHECKMARK_SIZE,
+    height: QUIZ_CONSTANTS.DIMENSIONS.CHECKMARK_SIZE,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkmarkText: {
     color: colors.white,
-    fontSize: 16,
+    fontSize: QUIZ_CONSTANTS.TEXT_SIZES.CHECKMARK_TEXT,
     fontWeight: 'bold',
   },
   bearContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 20,
-    paddingTop: 10,
-    marginTop: 20,
+    paddingBottom: QUIZ_CONSTANTS.SPACING.BEAR_CONTAINER_PADDING_BOTTOM,
+    paddingTop: QUIZ_CONSTANTS.SPACING.BEAR_CONTAINER_PADDING_TOP,
+    marginTop: QUIZ_CONSTANTS.SPACING.BEAR_CONTAINER_MARGIN_TOP,
     position: 'relative',
     width: '100%',
   },
   bearIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: QUIZ_CONSTANTS.DIMENSIONS.BEAR_ICON_SIZE,
+    height: QUIZ_CONSTANTS.DIMENSIONS.BEAR_ICON_SIZE,
+    borderRadius: QUIZ_CONSTANTS.DIMENSIONS.BEAR_ICON_RADIUS,
     backgroundColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
   },
   bearText: {
-    fontSize: 32,
+    fontSize: QUIZ_CONSTANTS.DIMENSIONS.BEAR_TEXT_SIZE,
   },
   connectionLine: {
     position: 'absolute',
-    width: 4, // Thinner line
+    width: QUIZ_CONSTANTS.DIMENSIONS.LASER_LINE_WIDTH,
     height: 100, // Will be overridden dynamically
     bottom: 30, // Start from center of bear (bear icon is 60px, center at 30px)
     left: '50%',
@@ -809,12 +497,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.8,
     shadowRadius: 8,
     elevation: 10,
-    zIndex: 100,
+    zIndex: QUIZ_CONSTANTS.Z_INDEX.LASER_LINE,
   },
   laserEndPoint: {
     position: 'absolute',
-    width: 40, // Larger for impact graphic
-    height: 40,
+    width: QUIZ_CONSTANTS.DIMENSIONS.LASER_END_POINT_SIZE,
+    height: QUIZ_CONSTANTS.DIMENSIONS.LASER_END_POINT_SIZE,
     bottom: 30, // Start from center of bear
     left: '50%',
     marginLeft: -20, // Center the point (half of width 40)
@@ -824,10 +512,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.9,
     shadowRadius: 12,
     elevation: 15,
-    zIndex: 101,
+    zIndex: QUIZ_CONSTANTS.Z_INDEX.LASER_END_POINT,
   },
   impactGraphic: {
-    fontSize: 32,
+    fontSize: QUIZ_CONSTANTS.DIMENSIONS.IMPACT_GRAPHIC_SIZE,
     textAlign: 'center',
   },
 });

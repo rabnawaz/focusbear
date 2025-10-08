@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,21 +9,39 @@ import {
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
-import { mockData } from '../data/mockData';
+import { getLeaderboardData } from '../services/sessionStorage';
 
 const LeaderboardModal = ({ visible, onClose }) => {
+  const [leaderboardData, setLeaderboardData] = useState([]);
+
+  useEffect(() => {
+    if (visible) {
+      loadLeaderboardData();
+    }
+  }, [visible]);
+
+  const loadLeaderboardData = async () => {
+    try {
+      const data = await getLeaderboardData();
+      // Add rank numbers to the data
+      const rankedData = data.map((item, index) => ({
+        ...item,
+        rank: index + 1
+      }));
+      setLeaderboardData(rankedData);
+    } catch (error) {
+      console.error('Error loading leaderboard data:', error);
+      setLeaderboardData([]);
+    }
+  };
+
   const renderLeaderboardItem = ({ item, index }) => {
-    const isCurrentUser = index === 1; // Highlight second row as current user
-    
     return (
-      <View style={[
-        styles.leaderboardRow,
-        isCurrentUser && styles.currentUserRow
-      ]}>
+      <View style={styles.leaderboardRow}>
         <Text style={styles.rankText}>{item.rank}</Text>
         <Text style={styles.userNameText}>{item.userName}</Text>
         <Text style={styles.scoreText}>{item.score}</Text>
-        <Text style={styles.bestRTText}>{item.bestRT}</Text>
+        <Text style={styles.bestRTText}>{item.bestRT > 0 ? `${item.bestRT}ms` : '— ms'}</Text>
       </View>
     );
   };
@@ -58,10 +76,15 @@ const LeaderboardModal = ({ visible, onClose }) => {
 
           {/* Leaderboard List */}
           <FlatList
-            data={mockData.leaderboard}
+            data={leaderboardData}
             renderItem={renderLeaderboardItem}
-            keyExtractor={(item) => item.rank.toString()}
+            keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No scores yet. Be the first!</Text>
+              </View>
+            }
           />
 
           {/* Close Button */}
@@ -180,6 +203,15 @@ const styles = StyleSheet.create({
     ...typography.button,
     color: colors.white,
     fontSize: 16,
+  },
+  emptyContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyText: {
+    ...typography.body,
+    color: colors.gray,
+    textAlign: 'center',
   },
 });
 
